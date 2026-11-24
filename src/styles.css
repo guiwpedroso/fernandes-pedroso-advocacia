@@ -1510,6 +1510,26 @@ ul[role="list"] {
   z-index: 1;
 }
 
+/* No mobile, o card fica muito alto para um vídeo horizontal em cover (causa zoom excessivo):
+   exibimos o vídeo em faixa 16:9 nítida no topo do card e o conteúdo logo abaixo. */
+@media (max-width: 767px) {
+  .contact-card-bg-video {
+    position: relative;
+    inset: auto;
+    width: 100%;
+    height: auto;
+    aspect-ratio: 16 / 9;
+    object-fit: cover;
+    object-position: center;
+    display: block;
+    border-bottom: 1px solid var(--line-dark);
+  }
+
+  .contact-card-bg-overlay {
+    display: none;
+  }
+}
+
 .contact-featured-inner {
   position: relative;
   z-index: 2;
