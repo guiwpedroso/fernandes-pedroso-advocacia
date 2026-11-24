@@ -33,7 +33,6 @@ document.addEventListener('DOMContentLoaded', () => {
   initWhatsAppFeedback();
   initFloatingWhatsApp();
   initCopyrightYear();
-  initTabVisibilityHandler();
 });
 
 /**
@@ -72,31 +71,50 @@ function initMotionAndPerformance() {
   // Aplica a configuração inicial padrão/sutil
   htmlEl.setAttribute('data-motion', configuredMotion);
 
-  // 3. Medição real de FPS nos primeiros 2 segundos para auto-rebaixamento se necessário
-  let frameCount = 0;
-  let startTime = performance.now();
-  let rafId = null;
+  // 3. Medição real de FPS após o carregamento completo e somente com a aba visível
+  function startFpsCheck() {
+    if (document.hidden) return;
+    let frameCount = 0;
+    let startTime = performance.now();
+    let aborted = false;
 
-  function measureFps(now) {
-    frameCount++;
-    const elapsed = now - startTime;
+    const onVisibility = () => {
+      if (document.hidden) aborted = true;
+    };
+    document.addEventListener('visibilitychange', onVisibility, { passive: true });
 
-    if (elapsed < 2000) {
-      rafId = requestAnimationFrame(measureFps);
-    } else {
-      const calculatedFps = (frameCount * 1000) / elapsed;
-      if (calculatedFps < 45) {
-        const currentMotion = htmlEl.getAttribute('data-motion');
-        if (currentMotion !== 'desligado') {
-          htmlEl.setAttribute('data-motion', 'leve');
-          // Dispara evento para pausar vídeos e exibir poster
-          window.dispatchEvent(new CustomEvent('fp:motion-downgraded'));
+    function measureFps(now) {
+      if (aborted || document.hidden) {
+        document.removeEventListener('visibilitychange', onVisibility);
+        return;
+      }
+
+      frameCount++;
+      const elapsed = now - startTime;
+
+      if (elapsed < 2000) {
+        requestAnimationFrame(measureFps);
+      } else {
+        document.removeEventListener('visibilitychange', onVisibility);
+        const calculatedFps = (frameCount * 1000) / elapsed;
+        if (calculatedFps < 45) {
+          const currentMotion = htmlEl.getAttribute('data-motion');
+          if (currentMotion !== 'desligado') {
+            htmlEl.setAttribute('data-motion', 'leve');
+            window.dispatchEvent(new CustomEvent('fp:motion-downgraded'));
+          }
         }
       }
     }
+
+    requestAnimationFrame(measureFps);
   }
 
-  rafId = requestAnimationFrame(measureFps);
+  if (document.readyState === 'complete') {
+    setTimeout(startFpsCheck, 800);
+  } else {
+    window.addEventListener('load', () => setTimeout(startFpsCheck, 800), { once: true });
+  }
 }
 
 /**
@@ -333,10 +351,29 @@ function initVideoManager() {
   };
 
   const lazyState = { office: false, contact: false };
+  const visibleVideos = new Set();
 
   function isMotionActive() {
     const motion = document.documentElement.getAttribute('data-motion');
     return motion !== 'desligado' && motion !== 'leve';
+  }
+
+  function safePlay(videoEl) {
+    if (!videoEl || !isMotionActive() || document.hidden) return;
+    videoEl.muted = true;
+    const playAttempt = videoEl.play();
+    if (playAttempt && typeof playAttempt.catch === 'function') {
+      playAttempt.catch(() => {
+        // Caso o vídeo ainda esteja carregando, tenta novamente no canplay
+        if (videoEl.readyState < 2) {
+          videoEl.addEventListener('canplay', () => {
+            if (visibleVideos.has(videoEl) && isMotionActive() && !document.hidden) {
+              videoEl.play().catch(() => {});
+            }
+          }, { once: true });
+        }
+      });
+    }
   }
 
   function applySources(videoEl, configKey, loadNow = true) {
@@ -364,6 +401,9 @@ function initVideoManager() {
       videoEl.preload = 'auto';
       videoEl.src = targetSrc;
       videoEl.load();
+      videoEl.addEventListener('canplay', () => {
+        if (visibleVideos.has(videoEl)) safePlay(videoEl);
+      }, { once: true });
     }
   }
 
@@ -376,9 +416,7 @@ function initVideoManager() {
     applySources(heroVideo, 'hero', true);
     applySources(officeVideo, 'office', lazyState.office);
     applySources(contactVideo, 'contact', lazyState.contact);
-    if (isMotionActive() && heroVideo) heroVideo.play().catch(() => {});
-    if (isMotionActive() && lazyState.office && officeVideo) officeVideo.play().catch(() => {});
-    if (isMotionActive() && lazyState.contact && contactVideo) contactVideo.play().catch(() => {});
+    visibleVideos.forEach((vid) => safePlay(vid));
   });
 
   window.addEventListener('fp:motion-downgraded', () => {
@@ -390,14 +428,27 @@ function initVideoManager() {
     });
   });
 
-  // Hero: pausa fora da tela
+  // Pausa ao sair da aba e retoma automaticamente os vídeos visíveis ao voltar
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      [heroVideo, officeVideo, contactVideo].forEach((vid) => vid?.pause());
+    } else {
+      visibleVideos.forEach((vid) => safePlay(vid));
+    }
+  });
+
+  // Hero: toca visível e pausa fora da tela
   if (heroVideo) {
+    visibleVideos.add(heroVideo);
+    safePlay(heroVideo);
+
     const heroObserver = new IntersectionObserver((entries) => {
-      if (!isMotionActive()) return;
       entries.forEach((entry) => {
         if (entry.isIntersecting) {
-          heroVideo.play().catch(() => {});
+          visibleVideos.add(heroVideo);
+          safePlay(heroVideo);
         } else {
+          visibleVideos.delete(heroVideo);
           heroVideo.pause();
         }
       });
@@ -424,15 +475,16 @@ function initVideoManager() {
     preloadObserver.observe(videoEl);
 
     const playObserver = new IntersectionObserver((entries) => {
-      if (!isMotionActive()) return;
       entries.forEach((entry) => {
         if (entry.isIntersecting) {
-          if (!lazyState[key]) {
+          visibleVideos.add(videoEl);
+          if (!lazyState[key] && isMotionActive()) {
             lazyState[key] = true;
             applySources(videoEl, key, true);
           }
-          videoEl.play().catch(() => {});
+          safePlay(videoEl);
         } else {
+          visibleVideos.delete(videoEl);
           videoEl.pause();
         }
       });
@@ -813,21 +865,4 @@ function initCopyrightYear() {
   if (yearEl) {
     yearEl.textContent = String(new Date().getFullYear());
   }
-}
-
-/**
- * 15. Pausar Vídeos quando a Aba fica Oculta (Economia de CPU/Bateria)
- */
-function initTabVisibilityHandler() {
-  const heroVideo = document.getElementById('hero-video');
-  const officeVideo = document.getElementById('office-recepcao-video');
-  const contactVideo = document.getElementById('contact-fachada-video');
-
-  document.addEventListener('visibilitychange', () => {
-    if (document.hidden) {
-      heroVideo?.pause();
-      officeVideo?.pause();
-      contactVideo?.pause();
-    }
-  });
 }
