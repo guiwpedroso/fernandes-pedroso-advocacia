@@ -58,12 +58,16 @@ function initMotionAndPerformance() {
     return;
   }
 
-  // 2. Heurística de economia de dados e hardware limitado
-  const isSaveData = Boolean(navigator.connection && navigator.connection.saveData);
-  const isLowConcurrency = Boolean(navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 4);
-  const isLowMemory = Boolean(navigator.deviceMemory && navigator.deviceMemory <= 4);
+  // 2. Heurística de economia de dados e hardware realmente limitado
+  // Nota: iOS Safari limita hardwareConcurrency a 4 e muitos Android reportam deviceMemory = 4,
+  // por isso só ativamos modo leve automático em Save-Data, rede 2G ou hardware <= 2 núcleos/2GB.
+  const conn = navigator.connection;
+  const isSaveData = Boolean(conn && conn.saveData);
+  const isSlowNet = Boolean(conn && (conn.effectiveType === '2g' || conn.effectiveType === 'slow-2g'));
+  const isLowConcurrency = Boolean(navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 2);
+  const isLowMemory = Boolean(navigator.deviceMemory && navigator.deviceMemory <= 2);
 
-  if (isSaveData || isLowConcurrency || isLowMemory) {
+  if (isSaveData || isSlowNet || isLowConcurrency || isLowMemory) {
     htmlEl.setAttribute('data-motion', 'leve');
     return;
   }
@@ -360,7 +364,9 @@ function initVideoManager() {
 
   function safePlay(videoEl) {
     if (!videoEl || !isMotionActive() || document.hidden) return;
+    videoEl.defaultMuted = true;
     videoEl.muted = true;
+    videoEl.playsInline = true;
     const playAttempt = videoEl.play();
     if (playAttempt && typeof playAttempt.catch === 'function') {
       playAttempt.catch(() => {
@@ -436,6 +442,15 @@ function initVideoManager() {
       visibleVideos.forEach((vid) => safePlay(vid));
     }
   });
+
+  // Fallback mobile: se o navegador bloqueou autoplay inicial, desbloqueia no primeiro toque
+  const unlockPlayback = () => {
+    visibleVideos.forEach((vid) => {
+      if (vid.paused) safePlay(vid);
+    });
+  };
+  window.addEventListener('touchstart', unlockPlayback, { once: true, passive: true });
+  window.addEventListener('click', unlockPlayback, { once: true, passive: true });
 
   // Hero: toca visível e pausa fora da tela
   if (heroVideo) {

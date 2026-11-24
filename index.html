@@ -141,7 +141,7 @@
     <section class="hero-section" id="hero" aria-label="Apresentação institucional">
       <div class="hero-media-wrapper" aria-hidden="true">
         <!-- O vídeo tem src e poster atribuídos dinamicamente via JS de acordo com matchMedia (<=768px) -->
-        <video class="hero-video" id="hero-video" autoplay muted loop playsinline preload="auto" poster="/assets/video/hero-escritorio-novo-poster.webp">
+        <video class="hero-video" id="hero-video" autoplay muted loop playsinline webkit-playsinline preload="auto" poster="/assets/video/hero-escritorio-novo-poster.webp">
         </video>
         <!-- Overlay estático de baixo para cima + leve escurecimento à esquerda -->
         <div class="hero-contrast-overlay"></div>
@@ -721,6 +721,7 @@
                    muted
                    loop
                    playsinline
+                   webkit-playsinline
                    preload="none"
                    poster="/assets/video/escritorio-recepcao-poster.webp"
                    aria-label="Recepção do escritório Fernandes Pedroso Advocacia em Matão-SP">
@@ -914,6 +915,7 @@
                  muted
                  loop
                  playsinline
+                 webkit-playsinline
                  preload="none"
                  poster="/assets/video/fachada-poster.webp"
                  aria-hidden="true">
