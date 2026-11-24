@@ -31,3 +31,7 @@ Para gerar o build de produção:
 npm run build
 npm run preview
 ```
+
+---
+
+Desenvolvido por [Guilherme Pedroso](https://github.com/guiwpedroso).
