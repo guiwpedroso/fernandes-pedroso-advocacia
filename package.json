@@ -1,0 +1,26 @@
+{
+  "name": "fernandes-pedroso-advocacia",
+  "version": "1.0.0",
+  "description": "Landing page profissional da Fernandes Pedroso Advocacia (Matão-SP)",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "node test-e2e.js"
+  },
+  "keywords": [
+    "advocacia",
+    "matao",
+    "previdenciario",
+    "auxilio-acidente",
+    "direito"
+  ],
+  "author": "Dr. Renan Fernandes Pedroso",
+  "license": "ISC",
+  "devDependencies": {
+    "puppeteer-core": "^25.18.1",
+    "sharp": "^0.35.5",
+    "vite": "^8.3.8"
+  }
+}
